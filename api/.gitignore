@@ -9,4 +9,5 @@ coverage.xml
 /uploads/*
 !/uploads/.gitkeep
 .env
+.secrets/
 .idea/
