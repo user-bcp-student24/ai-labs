@@ -8,10 +8,12 @@ from pathlib import Path
 from typing import Any
 
 import urllib3
-from fastapi import Body, Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
 LEGACY_SECRET = "WORKSHOP_SECRET_2026"
+ALLOWED_UPLOAD_EXTENSIONS = frozenset({".txt", ".md"})
+MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024
 
 
 def legacy_identity(authorization: str = Header(default="")) -> dict[str, str]:
@@ -24,6 +26,30 @@ def legacy_identity(authorization: str = Header(default="")) -> dict[str, str]:
         return {"username": parts[0], "role": parts[1]}
     except Exception as error:
         raise HTTPException(status_code=401, detail="Invalid token: " + str(error)) from error
+
+
+def authorized_owner(requested_owner: str | None, identity: dict[str, str]) -> str:
+    authenticated_owner = identity["username"]
+    if requested_owner is not None and requested_owner != authenticated_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this owner",
+        )
+    return authenticated_owner
+
+
+def safe_upload_target(upload_dir: str, original_filename: str | None) -> tuple[str, Path]:
+    normalized_filename = Path((original_filename or "").replace("\\", "/")).name
+    if not normalized_filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename")
+    if Path(normalized_filename).suffix.casefold() not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported file type")
+
+    upload_root = Path(upload_dir).resolve()
+    target = Path(upload_dir) / normalized_filename
+    if not target.resolve().is_relative_to(upload_root):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid filename")
+    return normalized_filename, target
 
 
 def create_app(db_path: str | None = None, upload_dir: str | None = None) -> FastAPI:
@@ -66,7 +92,7 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
 
     @app.get("/api/tasks")
     def list_tasks(owner: str | None = Query(default=None), identity: dict[str, str] = Depends(legacy_identity)) -> list[dict[str, Any]]:
-        requested_owner = owner or identity["username"]
+        requested_owner = authorized_owner(owner or None, identity)
         sql = "SELECT id,title,description,status,owner,priority,created_at FROM tasks WHERE owner='" + requested_owner + "' ORDER BY id"
         rows = connection.execute(sql).fetchall()
         result: list[dict[str, Any]] = []
@@ -80,7 +106,8 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
         description = str(payload.get("description", ""))
         status = str(payload.get("status", "TODO"))
         priority = str(payload.get("priority", "MEDIUM"))
-        owner = str(payload.get("owner", identity["username"]))
+        requested_owner = payload.get("owner")
+        owner = authorized_owner(str(requested_owner) if requested_owner is not None else None, identity)
         sql = "INSERT INTO tasks(title,description,status,owner,priority,created_at) VALUES ('" + title + "','" + description + "','" + status + "','" + owner + "','" + priority + "',datetime('now'))"
         cursor = connection.execute(sql)
         connection.commit()
@@ -89,7 +116,7 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
 
     @app.get("/api/summary")
     def summary(owner: str | None = Query(default=None), identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
-        requested_owner = owner or identity["username"]
+        requested_owner = authorized_owner(owner or None, identity)
         rows = connection.execute("SELECT status,priority FROM tasks WHERE owner='" + requested_owner + "'").fetchall()
         response: dict[str, Any] = {"owner": requested_owner, "total": 0, "byStatus": {}, "highPriorityOpen": 0}
         for row in rows:
@@ -106,10 +133,15 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
 
     @app.post("/api/requirements", status_code=201)
     async def upload_requirement(file: UploadFile = File(...), identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
-        target = Path(selected_uploads) / str(file.filename)
-        content = await file.read()
+        filename, target = safe_upload_target(selected_uploads, file.filename)
+        content = await file.read(MAX_UPLOAD_SIZE_BYTES + 1)
+        if len(content) > MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail="File exceeds maximum allowed size",
+            )
         target.write_bytes(content)
-        return {"owner": identity["username"], "fileName": file.filename, "storedAt": str(target), "size": len(content)}
+        return {"owner": identity["username"], "fileName": filename, "storedAt": str(target), "size": len(content)}
 
     @app.get("/api/backend-health")
     def backend_health(identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
