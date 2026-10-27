@@ -7,13 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from token_factory import make_token
 
 UPLOAD_SIZE_LIMIT_BYTES = 5 * 1024 * 1024
 
 
 def token(username: str = "student", role: str = "STUDENT") -> str:
-    raw = f"{username}|{role}|{int(time.time()) + 3600}|WORKSHOP_SECRET_2026"
-    return base64.b64encode(raw.encode()).decode()
+    return make_token(username, role)
 
 
 def headers(username: str = "student", role: str = "STUDENT") -> dict[str, str]:

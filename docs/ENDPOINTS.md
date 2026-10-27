@@ -6,9 +6,9 @@ Esta sección describe el código actual de `api/`; no presupone que la API est�
 
 ### Contrato observado
 
-Las cinco rutas requieren `Authorization: Bearer <token>`. El servidor elimina `Bearer ` y decodifica el resto como Base64 UTF-8 con cuatro partes separadas por `|`: username, role, expiración Unix y secreto legacy. Comprueba secreto y expiración, pero no firma criptográfica; el rol no participa en la autorización. Token inválido devuelve `401` con `{"detail":"Invalid token: ..."}` y el detalle depende de la causa. ([api/app/main.py:19](../api/app/main.py#L19), [api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:24](../api/app/main.py#L24), [api/app/main.py:28](../api/app/main.py#L28))
+Las cinco rutas requieren `Authorization: Bearer <token>`. El servidor elimina `Bearer ` y verifica una firma HMAC-SHA256 y decodifica el payload Base64 con tres campos separados por `|`: username, role y expiración Unix. Comprueba firma y expiración; el rol no participa en la autorización. Token inválido devuelve `401` con `{"detail":"Invalid token: ..."}` y el detalle depende de la causa. ([api/app/main.py:19](../api/app/main.py#L19), [api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:24](../api/app/main.py#L24), [api/app/main.py:28](../api/app/main.py#L28))
 
-Los ejemplos usan `<token>` como marcador, no como credencial válida. No hay una ruta de emisión ni un emisor JWT acordado; obtener una credencial válida depende de una coordinación pendiente. El secreto legacy no se publica.
+Los ejemplos usan `<token>` como marcador, no como credencial válida. La credencial se obtiene con `POST /auth/login`; la clave de firma viene de `WORKSHOP_TOKEN_SECRET` y no se publica.
 
 ### Contrato acordado
 
@@ -16,7 +16,7 @@ El registro humano de `PLAN.md` aprueba `403` cuando `owner` difiere de la ident
 
 ### Riesgos pendientes
 
-- La identidad viene de Base64 sin firma; `owner` se compara con el username del token, pero este todavía no es confiable. ([api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:31](../api/app/main.py#L31))
+- La identidad viene de un token firmado con HMAC-SHA256; `owner` se compara con el username del token verificado. ([api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:31](../api/app/main.py#L31))
 - Las consultas SQL concatenan valores; `POST /api/tasks` recibe un `dict[str, Any]` sin enums ni límites de longitud. ([api/app/main.py:96](../api/app/main.py#L96), [api/app/main.py:104](../api/app/main.py#L104), [api/app/main.py:111](../api/app/main.py#L111), [api/app/main.py:120](../api/app/main.py#L120))
 - `backend-health` expone el cuerpo upstream y el texto de excepciones; el upload devuelve la ruta local en `storedAt`. ([api/app/main.py:144](../api/app/main.py#L144), [api/app/main.py:151](../api/app/main.py#L151), [api/app/main.py:153](../api/app/main.py#L153))
 - Siguen pendientes el emisor/firma/issuer/audience, los valores válidos de campos de tarea y el contrato de errores de persistencia.
@@ -83,7 +83,7 @@ Responde `200 OK` con un arreglo. Si no hay tareas, devuelve `[]`. ([api/app/mai
 
 ### 6. Notas de seguridad
 
-La consulta SQL concatena el propietario. El 403 liga el filtro a la identidad del token, pero Base64 sin firma no autentica esa identidad. ([api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:95](../api/app/main.py#L95), [api/app/main.py:96](../api/app/main.py#L96))
+La consulta SQL concatena el propietario. El 403 liga el filtro a la identidad del token, la identidad se verifica con firma HMAC; la concatenación SQL sigue pendiente (H-API-03). ([api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:95](../api/app/main.py#L95), [api/app/main.py:96](../api/app/main.py#L96))
 
 ## `POST /api/tasks`
 
@@ -160,7 +160,7 @@ Responde `201 Created`. ([api/app/main.py:103](../api/app/main.py#L103), [api/ap
 
 ### 6. Notas de seguridad
 
-El SQL de inserción concatena campos del body; el token Base64 no tiene firma. ([api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:111](../api/app/main.py#L111))
+El SQL de inserción concatena campos del body (H-API-03); el token ya se verifica con firma HMAC. ([api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:111](../api/app/main.py#L111))
 
 ## `GET /api/summary`
 
@@ -219,7 +219,7 @@ Responde `200 OK`. `highPriorityOpen` cuenta prioridad `HIGH` con estado distint
 
 ### 6. Notas de seguridad
 
-La consulta concatena el propietario y la identidad viene de un token sin firma. ([api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:119](../api/app/main.py#L119), [api/app/main.py:120](../api/app/main.py#L120))
+La consulta concatena el propietario (H-API-03); la identidad viene de un token verificado con HMAC. ([api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:119](../api/app/main.py#L119), [api/app/main.py:120](../api/app/main.py#L120))
 
 ## `POST /api/requirements`
 
@@ -340,4 +340,4 @@ La API devuelve `200 OK`; `status` y `body` reflejan el status y body upstream. 
 
 ### 6. Notas de seguridad
 
-La ruta expone el body upstream o `str(error)` y usa una URL configurada por el servidor. La identidad sigue dependiendo del token Base64 sin firma. ([api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:147](../api/app/main.py#L147), [api/app/main.py:153](../api/app/main.py#L153))
+La ruta expone el body upstream o `str(error)` y usa una URL configurada por el servidor. La identidad se obtiene de un token verificado con HMAC. ([api/app/main.py:22](../api/app/main.py#L22), [api/app/main.py:147](../api/app/main.py#L147), [api/app/main.py:153](../api/app/main.py#L153))

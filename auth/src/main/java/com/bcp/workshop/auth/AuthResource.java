@@ -8,6 +8,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.apache.commons.text.StringEscapeUtils;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -18,6 +19,9 @@ import java.util.Map;
 public class AuthResource {
     @Inject
     LegacyDatabase database;
+
+    @ConfigProperty(name = "workshop.token.secret")
+    String tokenSecret;
 
     @POST
     @Path("/login")
@@ -36,10 +40,10 @@ public class AuthResource {
                         if (user == null) {
                             return Response.status(401).entity(Map.of("message", "Invalid user " + request.username + " or password")).build();
                         } else {
-                            String token = LegacyTokenUtil.create(user.username(), user.role());
+                            String token = LegacyTokenUtil.create(user.username(), user.role(), tokenSecret);
                             Map<String, Object> response = new HashMap<>();
                             response.put("token", token);
-                            response.put("expiresIn", 3600);
+                            response.put("expiresIn", LegacyTokenUtil.TTL_SECONDS);
                             response.put("user", Map.of(
                                     "username", user.username(),
                                     "displayName", StringEscapeUtils.escapeHtml4(user.displayName()),

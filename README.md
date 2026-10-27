@@ -38,6 +38,8 @@ Puedes recorrer los tres componentes. Conserva las evidencias anteriores y añad
 Necesitas Docker con Compose y el motor iniciado. Podman Compose es otra opción si ya está preparado en tu equipo.
 
 ```bash
+Antes, define `WORKSHOP_TOKEN_SECRET` en el entorno o en un `.env` local que no se versiona; Compose falla si falta.
+
 docker compose up --build
 ```
 

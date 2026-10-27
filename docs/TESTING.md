@@ -72,7 +72,7 @@ No hubo fallos de pytest en las ejecuciones registradas. La suite final reportó
 
 ## Pendientes
 
-- H-API-01/H-API-02: las pruebas usan el token Base64 legacy de test; no prueban un emisor JWT real ni demuestran que la identidad actual sea confiable.
+- H-API-01/H-API-02: las pruebas usan tokens firmados con una clave de prueba; no prueban el emisor real de `auth/`.
 - H-API-03: no se valida la remediación de SQL concatenado. No se agregó una prueba que acepte el bug como comportamiento esperado; falta prueba de round-trip para texto con comillas después de parametrizar SQL.
 - H-API-06: esta suite no sustituye un escaneo SCA offline; permanece pendiente según el plan.
 - `backend-health` se probó con mocks y sin red. La integración con el servicio real queda pendiente de coordinación.
