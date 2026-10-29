@@ -83,3 +83,57 @@ No hubo fallos de pytest en las ejecuciones registradas. La suite final reportó
 - Tras acordar issuer/audience con el emisor, añadir integración que obtenga un JWT real de prueba y valide firma, expiración e identidad (H-API-01/H-API-02).
 - Tras parametrizar las consultas, añadir regresión para crear/consultar texto ordinario con comillas y confirmar round-trip sin alterar consultas (H-API-03).
 - Ejecutar SCA únicamente con fuente local/offline aprobada y registrar evidencia separada (H-API-06).
+
+## auth
+
+### Alcance
+
+Evidencia del componente `auth` para el cambio OpenSpec `auth-bootstrap-seguro` (Issue [#22](https://github.com/user-bcp-student24/ai-labs/issues/22), H-AUTH-08). Solo cubre `auth/`; las pruebas usan valores de prueba aislados y una base SQLite temporal por perfil.
+
+### Matriz de pruebas
+
+| Clase.método | Tarea | Requisito o comportamiento protegido |
+| --- | --- | --- |
+| `AuthResourceTest.logsInWithWorkshopUser` | 1.1 | Login válido: `200`, `token`, `expiresIn=3600`, `user.role`, `debug`, `displayName` escapado. |
+| `AuthResourceTest.returnedTokenCarriesIdentityAndHmacSignature` | 1.2 | Token `base64(username\|role\|exp).hmac` firmado con el secreto de prueba. |
+| `AuthResourceTest.rejectsEmptyBodyWithBadRequest` | 1.3 | Cuerpo vacío: `400`, `Request is null`. |
+| `AuthResourceTest.rejectsBlankUsernameWithBadRequest` | 1.3 | `400`, `Username is required`. |
+| `AuthResourceTest.rejectsBlankPasswordWithBadRequest` | 1.3 | `400`, `Password is required`. |
+| `AuthResourceTest.rejectsUnknownUserWithoutToken` | 1.4 | Cuenta inexistente: `401`, sin `token` ni `expiresIn`. |
+| `AuthResourceTest.rejectsWrongPasswordWithoutToken` | 1.4 | Contraseña incorrecta: `401`, sin `token` ni `expiresIn`. |
+| `AuthResourceTest.rejectsSqlMetacharactersInCredentialsAsData` | 7.2 | Comillas y operadores SQL tratados como datos: `401` sin `token`. |
+| `BootstrapWithoutDemoUsersTest.freshProductionLikeDatabaseCreatesNoFixedBootstrapAccounts` | 3.3 | Base nueva sin `demo-users`: no existen `student` ni `trainer`. Spec "Sin credenciales fijas en producción". |
+| `BootstrapWithoutDemoUsersTest.fixedBootstrapCredentialsDoNotReturnToken` | 3.3 | `student/Workshop123!` y `trainer/Trainer123!`: `401` sin `token`. Spec "Login con credenciales fijas antiguas". |
+| `BootstrapWithoutDemoUsersTest.loginWithoutProvisionedAccountReturnsNoTokenOrExpiry` | 3.4 | Base vacía: `401` sin `token` ni `expiresIn`. Spec "Cuenta inexistente". |
+| `DemoUsersEnabledTest.demoAccountsAuthenticateOnlyWhenEnabledExplicitly` | 3.5 | Con `workshop.bootstrap.demo-users.enabled=true` la siembra sigue disponible en entornos no productivos. |
+| `BootstrapLogOutputTest.initializationAndLoginLogsOmitCredentialsSecretAndToken` | 4.2 | Logs de inicialización y login sin contraseñas, secreto de firma ni token. |
+
+Las pruebas de 3.3 y 3.4 usan `NoDemoUsersProfile` (`QuarkusTestProfile` con base temporal nueva), tal como indica tasks.md. Las pruebas de `AuthResourceTest` preparan la cuenta `auth-test-user` mediante `TestUserFixture`.
+
+### Ejecución registrada
+
+| fecha | componente | IDs relacionados | comando | código de salida | resultado |
+| --- | --- | --- | --- | --- | --- |
+| 2026-10-29 | auth | H-AUTH-08 | `mvn verify` (cwd `auth/`) | 0 | 15 pruebas, 0 fallos, 0 errores, 0 omitidas; `BUILD SUCCESS`. Sin ocurrencias de contraseñas, secretos ni tokens en la salida. |
+
+### Cobertura
+
+Medición con JaCoCo (`target/site/jacoco/jacoco.csv`) sobre `LegacyDatabase`, el único código de producción modificado en este cambio.
+
+| alcance | cubierto | total | porcentaje | método |
+| --- | ---: | ---: | ---: | --- |
+| `LegacyDatabase` líneas | 19 | 22 | 86,4% | JaCoCo LINE |
+| `LegacyDatabase` ramas | 5 | 6 | 83,3% | JaCoCo BRANCH |
+| `LegacyDatabase` sentencias + ramas | 24 | 28 | 85,7% | Criterio combinado de este documento |
+
+Las líneas y ramas no cubiertas corresponden a caminos de error de base de datos. El objetivo de 85% se cumple con el criterio combinado, con margen mínimo. `AuthResource` y `LegacyTokenUtil` no se modificaron.
+
+### Verificaciones manuales
+
+- `AUTH_DB_URL` sigue controlando la base de datos: con la variable definida, las pruebas crearon el archivo indicado (tarea 2.1).
+
+### Pendientes
+
+- Riesgo R1 (consulta concatenada) resuelto con consulta parametrizada (sección 7 de tasks.md).
+- Revisión humana y no integración sin aprobación (tarea 6.5).
+
