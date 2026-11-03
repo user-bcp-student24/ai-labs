@@ -8,6 +8,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.apache.commons.text.StringEscapeUtils;
+import org.jboss.logging.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -16,6 +17,8 @@ import java.util.Map;
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class AuthResource {
+    private static final Logger LOG = Logger.getLogger(AuthResource.class);
+
     @Inject
     LegacyDatabase database;
 
@@ -52,10 +55,10 @@ public class AuthResource {
                 }
             }
         } catch (Exception error) {
-            return Response.status(500).entity(Map.of(
-                    "message", error.getMessage() == null ? "Unknown error" : error.getMessage(),
-                    "exception", error.getClass().getName()
-            )).build();
+            LOG.error("Authentication request failed", error);
+            return Response.status(500)
+                    .entity(Map.of("message", "Internal server error"))
+                    .build();
         }
     }
 }

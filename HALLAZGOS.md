@@ -1,0 +1,21 @@
+# Hallazgos
+
+| id | componente | hallazgo | tipo | explicacion | evidencia (archivo:linea) | severidad | estado |
+|---|---|---|---|---|---|---|---|
+| H-AUTH-01 | auth | Concatenacion de credenciales en SQL | Vulnerabilidad | `username` y `password` se insertan directamente en la clausula `WHERE` y la consulta se ejecuta con `Statement`. Una entrada con sintaxis SQL puede alterar la condicion de autenticacion en vez de tratarse como valor literal. | auth/src/main/java/com/bcp/workshop/auth/LegacyDatabase.java:31-35 | alta | Pendiente |
+| H-AUTH-02 | auth | Token Base64 con secreto constante, sin firma | Vulnerabilidad | El token es una codificacion Base64 de username, role, expiracion y un valor constante; Base64 no firma ni protege esos campos. Un consumidor que confie en ese contenido no puede distinguir un token emitido de uno fabricado. | auth/src/main/java/com/bcp/workshop/auth/LegacyTokenUtil.java:8-15, auth/src/main/java/com/bcp/workshop/auth/AuthResource.java:39-42 | alta | Pendiente |
+| H-AUTH-03 | auth | Contrasenas almacenadas y verificadas en texto plano | Vulnerabilidad | La tabla declara una columna `password` sin hash y los usuarios de ejemplo insertan contrasenas literales; la consulta compara directamente el valor recibido. Una copia de la base expone las credenciales utilizables. | auth/src/main/java/com/bcp/workshop/auth/LegacyDatabase.java:22-24, auth/src/main/java/com/bcp/workshop/auth/LegacyDatabase.java:32 | alta | Pendiente |
+| H-AUTH-04 | auth | Secreto de token fijo y CORS demasiado permisivo | Vulnerabilidad | La constante del token esta en codigo y CORS acepta cualquier origen (`/.*/`). Esto deja la configuracion de autenticacion embebida y habilita solicitudes cross-origin desde origenes arbitrarios; el secreto no constituye una firma criptografica en el flujo actual. | auth/src/main/java/com/bcp/workshop/auth/LegacyTokenUtil.java:8, auth/src/main/resources/application.properties:4-7 | alta | Pendiente |
+| H-AUTH-05 | auth | Respuesta de error expone detalles internos | Vulnerabilidad | La respuesta 500 devuelve `error.getMessage()` y el nombre de clase de la excepcion. El cliente puede recibir detalles de implementacion que deberian permanecer en logs controlados. | auth/src/main/java/com/bcp/workshop/auth/AuthResource.java:54-58 | media | Pendiente |
+| H-AUTH-06 | auth | Resource concentra validacion, persistencia, negocio y respuesta | Refactor | `login` valida campos, llama directamente a la base, decide autenticacion, crea el token y ensambla la respuesta HTTP. El acoplamiento dificulta probar y cambiar cada responsabilidad sin efectos colaterales. | auth/src/main/java/com/bcp/workshop/auth/AuthResource.java:24-52 | media | Pendiente |
+| H-AUTH-07 | auth | Versiones de Quarkus y Commons Text requieren evaluacion SCA | Sugerencia | El manifiesto declara Quarkus 3.27.4 y Commons Text 1.9, los candidatos indicados por RETO. La version por si sola no confirma un CVE; falta revisar advisories y compatibilidad antes de recomendar un cambio. | auth/pom.xml:13, auth/pom.xml:49-50 | baja | Pendiente |
+
+## Contrato observado
+
+No existe `docs/ENDPOINTS.md`; no hay contrato acordado documentado que pueda contrastarse. El codigo observa `POST /auth/login` con JSON: requiere `username` y `password` no nulos ni vacios (400 si faltan); `client` se acepta en el DTO pero no se usa. Credenciales validas responden 200 con `token`, `expiresIn`, `user` (`username`, `displayName`, `role`) y `debug`. Credenciales no validas responden 401 con un mensaje que incluye el username. Una excepcion no manejada por capas inferiores responde 500 incluyendo mensaje y clase de excepcion.
+
+## Riesgos pendientes
+
+- No se ejecutaron pruebas ni se reprodujo la entrada SQL; la confirmacion de este Discovery es estatica, basada en la construccion/ejecucion de la consulta.
+- No se evaluaron advisories de Quarkus ni Commons Text; H-AUTH-07 no afirma que las versiones sean vulnerables.
+- No se comprobo el comportamiento de consumidores externos del token ni existe contrato acordado para su formato.
