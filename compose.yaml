@@ -2,12 +2,19 @@ name: ai-labs
 services:
   auth:
     build: ./auth
+    environment:
+      WORKSHOP_JWT_SECRET: "${WORKSHOP_JWT_SECRET:?Set WORKSHOP_JWT_SECRET}"
+      WORKSHOP_JWT_ISSUER: "${WORKSHOP_JWT_ISSUER:-api-pym}"
+      WORKSHOP_JWT_AUDIENCE: "${WORKSHOP_JWT_AUDIENCE:-PO}"
     ports:
       - "127.0.0.1:8080:8080"
   api:
     build: ./api
     environment:
       AUTH_HEALTH_URL: http://auth:8080/q/health
+      WORKSHOP_JWT_SECRET: "${WORKSHOP_JWT_SECRET:?Set WORKSHOP_JWT_SECRET}"
+      WORKSHOP_JWT_ISSUER: "${WORKSHOP_JWT_ISSUER:-api-pym}"
+      WORKSHOP_JWT_AUDIENCE: "${WORKSHOP_JWT_AUDIENCE:-PO}"
       WORKSHOP_DB_PATH: /data/workshop.db
       WORKSHOP_UPLOAD_DIR: /uploads
     volumes:

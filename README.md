@@ -36,6 +36,7 @@ Puedes recorrer los tres componentes. Conserva las evidencias anteriores y añad
 ## Arranque completo
 
 Necesitas Docker con Compose y el motor iniciado. Podman Compose es otra opción si ya está preparado en tu equipo.
+`auth` y `api` comparten la configuración JWT: define `WORKSHOP_JWT_SECRET` con al menos 32 bytes antes de arrancar; no guardes ese secreto en el repositorio. `WORKSHOP_JWT_ISSUER` y `WORKSHOP_JWT_AUDIENCE` tienen los valores locales `api-pym` y `PO` por defecto.
 
 ```bash
 docker compose up --build
@@ -55,6 +56,8 @@ Al terminar, Ctrl+C y después docker compose down. Esto conserva los volúmenes
 ## Ejecutar un componente
 
 Para desarrollar sin contenedores necesitas JDK 21 y Maven 3.9+ para auth; Python 3.13 para api; Node.js 22.12+ y npm para web. Usa una terminal por servicio y ejecuta los comandos desde la raíz:
+
+Antes de iniciar `auth` o `api` localmente, exporta la misma `WORKSHOP_JWT_SECRET` en ambas terminales. Usa también los mismos valores de `WORKSHOP_JWT_ISSUER` y `WORKSHOP_JWT_AUDIENCE`.
 
 ```bash
 python tools/lab.py setup auth

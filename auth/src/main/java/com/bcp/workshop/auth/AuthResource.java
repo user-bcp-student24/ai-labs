@@ -42,7 +42,7 @@ public class AuthResource {
                             String token = LegacyTokenUtil.create(user.username(), user.role());
                             Map<String, Object> response = new HashMap<>();
                             response.put("token", token);
-                            response.put("expiresIn", 3600);
+                            response.put("expiresIn", LegacyTokenUtil.TOKEN_LIFETIME_SECONDS);
                             response.put("user", Map.of(
                                     "username", user.username(),
                                     "displayName", StringEscapeUtils.escapeHtml4(user.displayName()),
